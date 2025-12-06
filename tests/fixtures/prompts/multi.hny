@@ -1,0 +1,14 @@
+summarize
+Summarize the following text:
+{{text}}
+---
+translate
+Translate the following text to {{language}}:
+{{text}}
+---
+analyze
+Analyze this data:
+{{data}}
+
+Focus on: {{focus}}
+--------

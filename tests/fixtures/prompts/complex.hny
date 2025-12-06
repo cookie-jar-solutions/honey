@@ -1,0 +1,11 @@
+system
+You are a helpful AI assistant.
+Be concise and accurate.
+---
+chat
+{% if context %}
+Context: {{ context }}
+{% endif %}
+
+User: {{ message }}
+---

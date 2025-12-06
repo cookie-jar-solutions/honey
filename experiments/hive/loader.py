@@ -87,24 +87,59 @@ def parse_hny_file(filepath: Path) -> Dict[str, str]:
 def create_prompt_function(template_str: str):
     """Create a callable function that renders a Jinja2 template.
     
+    When called within a jar context, the function executes the prompt with the LLM.
+    When called outside a jar context, it returns the rendered template string.
+    
     Args:
         template_str: The Jinja2 template string
         
     Returns:
-        A function that accepts keyword arguments and returns rendered template
+        A runtime-aware function that accepts keyword arguments
     """
+    from . import jars  # Import here to avoid circular dependency
+    
     template = Template(template_str)
     
-    def prompt_function(**kwargs) -> str:
+    def prompt_function(**kwargs):
         """Render the prompt template with the provided variables.
+        
+        When inside a jar context, executes the prompt with the LLM and returns the response.
+        When outside a jar context, returns the rendered prompt string.
+        
+        In async jar contexts, this returns a coroutine that must be awaited.
         
         Args:
             **kwargs: Template variables to render
             
         Returns:
-            Rendered prompt string
+            Rendered prompt string, LLM response, or awaitable coroutine
         """
-        return template.render(**kwargs)
+        # Render the template
+        rendered_prompt = template.render(**kwargs)
+        
+        # Check for active jar contexts
+        sync_jar = jars.get_active_jar()
+        async_jar = jars.get_active_async_jar()
+        
+        if async_jar is not None:
+            # Return a coroutine for async context
+            async def execute_async():
+                return await async_jar.aexecute(
+                    rendered_prompt,
+                    template=template_str,
+                    kwargs=kwargs
+                )
+            return execute_async()
+        elif sync_jar is not None:
+            # Execute synchronously
+            return sync_jar.execute(
+                rendered_prompt,
+                template=template_str,
+                kwargs=kwargs
+            )
+        else:
+            # No jar context - return rendered template
+            return rendered_prompt
     
     # Store the template string as an attribute for inspection
     prompt_function.__template__ = template_str
