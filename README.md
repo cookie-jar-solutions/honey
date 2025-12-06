@@ -1,25 +1,35 @@
 # Honey 🍯
 
-A powerful prompt templating and LLM execution framework for Python. Write your prompts in `.hny` files, import them like Python modules, and execute them with stateful LLM conversations.
+A powerful prompt templating and LLM execution framework for Python. Write your prompts in `.hny` files, import them like Python modules, and execute them with stateful LLM conversations using **jars** (runtime contexts).
 
 ## Features
 
-- 🎯 **Template-based prompts**: Write prompts in `.hny` files with Jinja2 templating
-- 🔌 **Auto-importing**: Import `.hny` files as Python modules automatically
-- 🤖 **Multi-LLM support**: OpenAI, Anthropic Claude, Google Gemini
-- 🔄 **Stateful conversations**: Maintain conversation history across multiple turns
+- 🍯 **Import `.hny` files as Python modules** - Write prompts in simple template files with Jinja2
+- 🫙 **Jar runtimes** - Execute prompts with LLMs using context managers
+- 🤖 **Multi-LLM support**: OpenAI GPT, Anthropic Claude, Google Gemini
+- 🔄 **Stateful conversations**: Jars maintain conversation history across multiple turns
 - ⚡ **Async support**: Full async/await support for concurrent operations
+- 🎯 **Reusable & composable**: Create jar instances and reuse across contexts
 - 🧪 **Mock jar**: Built-in mock for testing without API calls
 
 ## Installation
 
 ```bash
-# Install with uv (recommended)
+# Install base package with uv (recommended)
 uv pip install -e .
+
+# Install with specific LLM providers
+uv pip install -e . openai                  # For OpenAI GPT models
+uv pip install -e . anthropic               # For Anthropic Claude
+uv pip install -e . google-generativeai     # For Google Gemini
 
 # Or with pip
 pip install -e .
 ```
+
+**Dependencies:**
+- Core: `jinja2>=3.1.6` (required)
+- Optional: `openai`, `anthropic`, `google-generativeai` (install as needed)
 
 ## Quick Start
 
@@ -77,15 +87,20 @@ with jar:
 from hive import openai_jar
 import chat_prompts
 
+# Create reusable jar
 jar = openai_jar(model="gpt-4", api_key="your-api-key")
 jar.add_system_prompt("You are a helpful coding assistant")
 
-with jar:
-    response1 = chat_prompts.ask(question="What is Python?")
-    response2 = chat_prompts.ask(question="Show me a function example")
-    # Jar maintains conversation history across calls
+# Chat loop - jar maintains conversation history
+for _ in range(5):
+    user_msg = input("You: ")
+    
+    with jar:
+        response = chat_prompts.respond(message=user_msg)
+    
+    print(f"Assistant: {response}")
 
-# Access conversation history
+# Access conversation history and stats
 history = jar.get_history()
 print(f"Total messages: {jar.message_count}")
 print(f"Total tokens: {jar.total_tokens}")
@@ -101,8 +116,8 @@ import prompts
 async def main():
     jar = openai_jar(model="gpt-4", api_key="your-api-key")
     
+    # Execute prompts concurrently
     async with jar:
-        # Execute prompts concurrently
         results = await asyncio.gather(
             prompts.analyze(data="dataset1"),
             prompts.analyze(data="dataset2"),
@@ -112,6 +127,24 @@ async def main():
     print(results)
 
 asyncio.run(main())
+```
+
+**Nested jars (inner overrides outer):**
+
+```python
+from hive import openai_jar, anthropic_jar
+from prompts.demo import summarize
+
+outer = openai_jar(model="gpt-3.5-turbo")
+inner = anthropic_jar(model="claude-3-5-sonnet-20241022")
+
+with outer:
+    result1 = summarize(text="...")  # Uses GPT-3.5
+    
+    with inner:
+        result2 = summarize(text="...")  # Uses Claude
+    
+    result3 = summarize(text="...")  # Back to GPT-3.5
 ```
 
 ## .hny File Format
@@ -236,7 +269,7 @@ uv pip install -e ".[dev]"
 uv run pytest tests/ -v
 
 # Run with coverage
-uv run pytest tests/ --cov=experiments/hive --cov-report=html
+uv run pytest tests/ --cov=hive --cov-report=html
 
 # Run specific test file
 uv run pytest tests/hive/test_jars.py -v
@@ -247,14 +280,14 @@ uv run pytest tests/hive/test_jars.py::TestMockJar::test_execute_returns_mock_re
 
 ### Test Coverage
 
-Current coverage: **81.89%** (71 tests passing)
+Current coverage: **81.89%** (84 tests passing)
 
-- `experiments/hive/jars.py`: 80.25%
-- `experiments/hive/loader.py`: 85.34%
+- `hive/jars.py`: 80.25%
+- `hive/loader.py`: 85.34%
 
 View detailed coverage report:
 ```bash
-uv run pytest tests/ --cov=experiments/hive --cov-report=html
+uv run pytest tests/ --cov=hive --cov-report=html
 open htmlcov/index.html
 ```
 
@@ -262,11 +295,12 @@ open htmlcov/index.html
 
 ```
 honey/
-├── experiments/
-│   └── hive/
-│       ├── __init__.py      # Package exports
-│       ├── loader.py        # .hny file import system
-│       └── jars.py          # LLM execution jars
+├── hive/
+│   ├── __init__.py      # Package exports
+│   ├── loader.py        # .hny file import system
+│   └── jars.py          # LLM execution jars
+├── examples/
+│   └── prompts/         # Example .hny files
 ├── tests/
 │   ├── conftest.py          # Shared fixtures
 │   ├── fixtures/
@@ -281,20 +315,78 @@ honey/
 └── README.md
 ```
 
+## Advanced Features
+
+### Concurrent Async Execution
+
+```python
+import asyncio
+from hive import anthropic_jar
+from prompts.demo import summarize
+
+async def process_many(articles):
+    jar = anthropic_jar(model="claude-3-5-sonnet-20241022")
+    
+    async def process(text):
+        async with jar:
+            return await summarize(text=text)
+    
+    results = await asyncio.gather(*[process(text) for text in articles])
+    return results
+```
+
+### Jinja2 Advanced Templates
+
+```hny
+conditional_prompt
+{% if premium %}
+Premium analysis for: {{topic}}
+Include advanced insights.
+{% else %}
+Basic analysis for: {{topic}}
+{% endif %}
+---
+
+loop_prompt
+Analyze the following items:
+{% for item in items %}
+- {{item}}
+{% endfor %}
+```
+
 ## How It Works
 
-1. **Import Hook**: When you `import hive`, it installs a custom import hook (`HnyFinder`) in `sys.meta_path`
-2. **File Discovery**: When you import a module, the hook searches `sys.path` for `.hny` files
-3. **Template Loading**: Found `.hny` files are parsed and converted into Python functions
-4. **Runtime Detection**: Each function checks if a jar is active via `contextvars`
-5. **Execution**: 
-   - No jar → renders template and returns string
-   - Sync jar → calls `jar.execute(prompt)`
-   - Async jar → returns coroutine for `jar.aexecute(prompt)`
+1. **Import Hook**: When you `import hive`, it automatically installs a custom import hook (`HnyFinder`) in `sys.meta_path`
+2. **File Discovery**: When you import a module, the hook searches `sys.path` for matching `.hny` files
+3. **Template Parsing**: Found `.hny` files are parsed and each prompt becomes a callable Python function
+4. **Runtime Detection**: Each function checks for active jars using `contextvars`
+5. **Smart Execution**: 
+   - No jar → renders Jinja2 template and returns string
+   - Sync jar → calls `jar.execute(prompt)` with LLM
+   - Async jar → returns coroutine for `await jar.aexecute(prompt)`
+
+The framework uses context variables to track active jars separately for sync and async contexts, enabling proper isolation and concurrent execution.
+
+## API Keys
+
+Set API keys via environment variables or pass directly to jars:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+export GOOGLE_API_KEY="..."
+```
+
+Or pass directly:
+```python
+jar = openai_jar(model="gpt-4", api_key="sk-...")
+```
 
 ## Examples
 
-See `experiments/sample.py` for a complete working example.
+See the `examples/` directory for complete working code:
+- `examples/prompts/` - Sample `.hny` prompt files
+- Other example scripts demonstrating various features
 
 ## License
 
@@ -304,5 +396,5 @@ MIT
 
 Contributions welcome! Please ensure:
 - All tests pass: `uv run pytest tests/`
-- Coverage stays above 80%: `uv run pytest tests/ --cov=experiments/hive`
+- Coverage stays above 80%: `uv run pytest tests/ --cov=hive`
 - Code follows existing patterns

@@ -5,11 +5,6 @@ import pytest
 from pathlib import Path
 from typing import Generator
 
-# Add experiments to path so we can import hive
-EXPERIMENTS_DIR = Path(__file__).parent.parent / "experiments"
-if str(EXPERIMENTS_DIR) not in sys.path:
-    sys.path.insert(0, str(EXPERIMENTS_DIR))
-
 
 @pytest.fixture
 def fixtures_dir() -> Path:
