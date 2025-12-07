@@ -55,9 +55,7 @@ class TestJarBase:
     
     def test_add_system_prompt(self):
         """Test adding system prompt."""
-        jar = MockJar()
-        
-        jar.add_system_prompt("You are helpful")
+        jar = MockJar(system_prompt="You are helpful")
         
         assert len(jar.history) == 1
         assert jar.history[0]["role"] == "system"
@@ -201,8 +199,7 @@ class TestAnthropicJar:
     
     def test_prepare_messages_separates_system(self):
         """Test that system prompts are separated."""
-        jar = AnthropicJar()
-        jar.add_system_prompt("You are helpful")
+        jar = AnthropicJar(system_prompt="You are helpful")
         jar.add_message("user", "Hello")
         jar.add_message("assistant", "Hi")
         
@@ -233,8 +230,7 @@ class TestAnthropicJar:
     
     def test_execute_includes_system_prompt(self):
         """Test execute includes system prompt in API call."""
-        jar = AnthropicJar(api_key="test-key")
-        jar.add_system_prompt("Be helpful")
+        jar = AnthropicJar(api_key="test-key", system_prompt="Be helpful")
         
         mock_client = Mock()
         mock_response = Mock()
@@ -313,8 +309,7 @@ class TestJarReusability:
     
     def test_jar_state_persists_between_contexts(self):
         """Test jar state persists between context uses."""
-        jar = MockJar()
-        jar.add_system_prompt("System instruction")
+        jar = MockJar(system_prompt="System instruction")
         
         with jar:
             jar.execute("Message 1")
@@ -369,11 +364,11 @@ class TestOpenAICompatibleJar:
         """Test execute passes history (not messages) to API."""
         jar = OpenAICompatibleJar(
             model="llama3",
-            base_url="http://localhost:11434/v1"
+            base_url="http://localhost:11434/v1",
+            system_prompt="You are helpful"
         )
         
         # Add some conversation history
-        jar.add_system_prompt("You are helpful")
         jar.add_message("user", "First question")
         jar.add_message("assistant", "First answer")
         
