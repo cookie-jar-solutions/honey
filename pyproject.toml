@@ -21,7 +21,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = [
     "-v",
-    "--cov=hive",
+    "--cov=honey",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--strict-markers",
@@ -33,7 +33,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["hive"]
+source = ["honey"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",

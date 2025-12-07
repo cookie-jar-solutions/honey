@@ -3,7 +3,7 @@
 import sys
 import pytest
 from pathlib import Path
-from hive import loader
+from honey import loader
 
 
 class TestParseHnyFile:

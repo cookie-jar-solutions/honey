@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for hive tests."""
+"""Shared pytest fixtures for honey tests."""
 
 import sys
 import pytest
@@ -89,14 +89,14 @@ def isolated_meta_path() -> Generator[None, None, None]:
 @pytest.fixture
 def mock_jar():
     """Create a mock jar instance for testing."""
-    from hive import mock_jar as MockJarClass
+    from honey import mock_jar as MockJarClass
     return MockJarClass()
 
 
 @pytest.fixture
 def clean_jar_context():
     """Ensure no jar contexts are active before/after test."""
-    from hive import jars
+    from honey import jars
     
     # Clear any existing contexts
     jars._sync_jar.set(None)
@@ -123,5 +123,5 @@ def sample_prompts():
 @pytest.fixture(autouse=True)
 def ensure_loader_installed():
     """Ensure the .hny loader is installed for all tests."""
-    from hive import loader
+    from honey import loader
     loader.install()

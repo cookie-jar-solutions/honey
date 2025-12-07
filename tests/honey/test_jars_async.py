@@ -3,7 +3,7 @@
 import pytest
 import asyncio
 from unittest.mock import Mock, AsyncMock, MagicMock
-from hive.jars import MockJar, OpenAIJar, AnthropicJar, GeminiJar, get_active_async_jar
+from honey.jars import MockJar, OpenAIJar, AnthropicJar, GeminiJar, get_active_async_jar
 
 
 class TestAsyncJarContextManagers:
@@ -224,7 +224,7 @@ class TestAsyncContextIsolation:
     @pytest.mark.asyncio
     async def test_sync_and_async_contexts_isolated(self, clean_jar_context):
         """Test sync and async jars are isolated from each other."""
-        from hive.jars import get_active_jar
+        from honey.jars import get_active_jar
         
         sync_jar = MockJar()
         async_jar = MockJar()

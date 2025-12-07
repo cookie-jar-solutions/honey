@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, MagicMock, patch
-from hive.jars import Jar, MockJar, OpenAIJar, AnthropicJar, GeminiJar, get_active_jar
+from honey.jars import Jar, MockJar, OpenAIJar, AnthropicJar, GeminiJar, get_active_jar
 
 
 class TestJarBase:
