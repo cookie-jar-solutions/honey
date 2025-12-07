@@ -8,6 +8,8 @@ import contextvars
 from typing import Optional, List, Dict, Any
 from abc import ABC, abstractmethod
 
+from dotenv import load_dotenv
+load_dotenv()
 
 # Context variables to track active jars (separate for sync and async)
 _sync_jar: contextvars.ContextVar[Optional['Jar']] = contextvars.ContextVar(
@@ -218,6 +220,121 @@ class OpenAIJar(Jar):
         
         return assistant_message
 
+class OpenAICompatibleJar(Jar):
+    """Jar implementation for OpenAI-compatible API endpoints.
+    
+    Works with any service that implements the OpenAI API specification,
+    such as Ollama, LM Studio, vLLM, LocalAI, etc.
+    """
+    
+    def __init__(self, model: str, base_url: str, api_key: Optional[str] = "not-needed", **kwargs):
+        """Initialize OpenAI-compatible jar.
+        
+        Args:
+            model: Model name (specific to your API provider)
+            base_url: Base URL for the API endpoint (e.g., "http://localhost:11434/v1")
+            api_key: API key (optional, defaults to "not-needed" for local endpoints)
+            **kwargs: Additional API parameters (temperature, max_tokens, etc.)
+        """
+        super().__init__(model=model, api_key=api_key, base_url=base_url, **kwargs)
+        self._client = None
+        self._async_client = None
+    
+    def _get_client(self):
+        """Lazy load OpenAI-compatible sync client."""
+        if self._client is None:
+            try:
+                from openai import OpenAI
+                self._client = OpenAI(
+                    api_key=self.config.get('api_key'),
+                    base_url=self.config.get('base_url')
+                )
+            except ImportError:
+                raise ImportError(
+                    "OpenAI package not installed. Install it with: pip install openai"
+                )
+        return self._client
+    
+    def _get_async_client(self):
+        """Lazy load OpenAI-compatible async client."""
+        if self._async_client is None:
+            try:
+                from openai import AsyncOpenAI
+                self._async_client = AsyncOpenAI(
+                    api_key=self.config.get('api_key'),
+                    base_url=self.config.get('base_url')
+                )
+            except ImportError:
+                raise ImportError(
+                    "OpenAI package not installed. Install it with: pip install openai"
+                )
+        return self._async_client
+    
+    def execute(self, prompt: str, **metadata) -> str:
+        """Execute prompt using OpenAI-compatible API synchronously."""
+        client = self._get_client()
+        
+        # Add user message to history
+        self.add_message("user", prompt)
+        
+        # Prepare API call
+        api_kwargs = {k: v for k, v in self.config.items() if k not in ['api_key', 'base_url']}
+        
+        try:
+            response = client.chat.completions.create(
+                messages=self.messages,
+                **api_kwargs
+            )
+            
+            # Extract assistant's response
+            assistant_message = response.choices[0].message.content
+            
+            # Add to history
+            self.add_message("assistant", assistant_message)
+            
+            # Update token counts
+            if hasattr(response, 'usage') and response.usage:
+                self.prompt_tokens += response.usage.prompt_tokens
+                self.completion_tokens += response.usage.completion_tokens
+                self.total_tokens += response.usage.total_tokens
+            
+            return assistant_message
+            
+        except Exception as e:
+            raise RuntimeError(f"OpenAI-compatible API error: {str(e)}")
+    
+    async def aexecute(self, prompt: str, **metadata) -> str:
+        """Execute prompt using OpenAI-compatible API asynchronously."""
+        client = self._get_async_client()
+        
+        # Add user message to history
+        self.add_message("user", prompt)
+        
+        # Prepare API call
+        api_kwargs = {k: v for k, v in self.config.items() if k not in ['api_key', 'base_url']}
+        
+        try:
+            response = await client.chat.completions.create(
+                messages=self.messages,
+                **api_kwargs
+            )
+            
+            # Extract assistant's response
+            assistant_message = response.choices[0].message.content
+            
+            # Add to history
+            self.add_message("assistant", assistant_message)
+            
+            # Update token counts
+            if hasattr(response, 'usage') and response.usage:
+                self.prompt_tokens += response.usage.prompt_tokens
+                self.completion_tokens += response.usage.completion_tokens
+                self.total_tokens += response.usage.total_tokens
+            
+            return assistant_message
+            
+        except Exception as e:
+            raise RuntimeError(f"OpenAI-compatible API error: {str(e)}")
 
 class AnthropicJar(Jar):
     """Jar that uses Anthropic API for LLM execution."""
@@ -357,25 +474,28 @@ class GeminiJar(Jar):
         """Lazy load Gemini sync client."""
         if self._client is None:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=self.config.get('api_key'))
-                self._client = genai.GenerativeModel(self.config['model'])
+                from google import genai
+                self._client = genai.Client(
+                    api_key=self.config.get("api_key")
+                )
             except ImportError:
                 raise ImportError(
-                    "Google Generative AI package not installed. Install it with: pip install google-generativeai"
+                    "Google GenAI package not installed. Install it with: uv add google-genai"
                 )
         return self._client
-    
+
+
     def _get_async_client(self):
         """Lazy load Gemini async client."""
         if self._async_client is None:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=self.config.get('api_key'))
-                self._async_client = genai.GenerativeModel(self.config['model'])
+                from google import genai
+                self._async_client = genai.AsyncClient(
+                    api_key=self.config.get("api_key")
+                )
             except ImportError:
                 raise ImportError(
-                    "Google Generative AI package not installed. Install it with: pip install google-generativeai"
+                    "Google GenAI package not installed. Install it with: uv add google-genai"
                 )
         return self._async_client
     
@@ -470,4 +590,4 @@ def get_active_async_jar() -> Optional[Jar]:
 
 
 # Export jar classes for user instantiation
-__all__ = ['Jar', 'MockJar', 'OpenAIJar', 'AnthropicJar', 'GeminiJar', 'get_active_jar', 'get_active_async_jar']
+__all__ = ['Jar', 'MockJar', 'OpenAIJar', 'OpenAICompatiblejar', 'AnthropicJar', 'GeminiJar', 'get_active_jar', 'get_active_async_jar']
