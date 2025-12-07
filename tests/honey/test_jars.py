@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, MagicMock, patch
-from honey.jars import Jar, MockJar, OpenAIJar, AnthropicJar, GeminiJar, get_active_jar
+from honey.jars import Jar, MockJar, OpenAIJar, OpenAICompatibleJar, AnthropicJar, GeminiJar, get_active_jar
 
 
 class TestJarBase:
@@ -325,3 +325,128 @@ class TestJarReusability:
         history = jar.get_history()
         assert history[0]["role"] == "system"
         assert len(history) == 5  # system + 2*(user + assistant)
+
+
+class TestOpenAICompatibleJar:
+    """Tests for OpenAICompatibleJar with mocked client."""
+    
+    def test_initialization(self):
+        """Test OpenAI-compatible jar initialization."""
+        jar = OpenAICompatibleJar(
+            model="llama3", 
+            base_url="http://localhost:11434/v1",
+            api_key="not-needed"
+        )
+        
+        assert jar.config["model"] == "llama3"
+        assert jar.config["base_url"] == "http://localhost:11434/v1"
+        assert jar.config["api_key"] == "not-needed"
+    
+    def test_execute_with_mocked_client(self):
+        """Test execute with mocked OpenAI-compatible client."""
+        jar = OpenAICompatibleJar(
+            model="llama3",
+            base_url="http://localhost:11434/v1"
+        )
+        
+        # Mock the client
+        mock_client = Mock()
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(content="LLM response"))]
+        mock_response.usage = Mock(total_tokens=50)
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        jar._client = mock_client
+        
+        result = jar.execute("Test prompt")
+        
+        assert result == "LLM response"
+        assert jar.total_tokens == 50
+        assert jar.message_count == 2
+        mock_client.chat.completions.create.assert_called_once()
+    
+    def test_execute_passes_history_correctly(self):
+        """Test execute passes history (not messages) to API."""
+        jar = OpenAICompatibleJar(
+            model="llama3",
+            base_url="http://localhost:11434/v1"
+        )
+        
+        # Add some conversation history
+        jar.add_system_prompt("You are helpful")
+        jar.add_message("user", "First question")
+        jar.add_message("assistant", "First answer")
+        
+        mock_client = Mock()
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(content="Response"))]
+        mock_response.usage = Mock(total_tokens=10)
+        
+        # Capture messages at call time (before assistant response is added)
+        captured_messages = None
+        def capture_messages(**kwargs):
+            nonlocal captured_messages
+            captured_messages = kwargs["messages"].copy()  # Copy the list
+            return mock_response
+        
+        mock_client.chat.completions.create.side_effect = capture_messages
+        
+        jar._client = mock_client
+        result = jar.execute("Second question")
+        
+        # Verify the messages parameter sent to API (captured before assistant response)
+        assert captured_messages is not None
+        assert len(captured_messages) == 4  # system, user, assistant, user
+        assert captured_messages[0]["role"] == "system"
+        assert captured_messages[1]["content"] == "First question"
+        assert captured_messages[2]["content"] == "First answer"
+        assert captured_messages[3]["content"] == "Second question"
+        
+        # After execute completes, history should have the assistant response too
+        assert len(jar.history) == 5
+    
+    def test_execute_passes_config_to_api(self):
+        """Test execute passes configuration to API, filtering base_url and api_key."""
+        jar = OpenAICompatibleJar(
+            model="llama3",
+            base_url="http://localhost:11434/v1",
+            temperature=0.7,
+            max_tokens=100
+        )
+        
+        mock_client = Mock()
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(content="Response"))]
+        mock_response.usage = Mock(total_tokens=10)
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        jar._client = mock_client
+        jar.execute("Test")
+        
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["model"] == "llama3"
+        assert call_kwargs["temperature"] == 0.7
+        assert call_kwargs["max_tokens"] == 100
+        # These should be filtered out
+        assert "api_key" not in call_kwargs
+        assert "base_url" not in call_kwargs
+    
+    def test_execute_handles_missing_usage(self):
+        """Test execute handles responses without usage data."""
+        jar = OpenAICompatibleJar(
+            model="llama3",
+            base_url="http://localhost:11434/v1"
+        )
+        
+        mock_client = Mock()
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(content="Response"))]
+        mock_response.usage = None  # Some APIs might not return usage
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        jar._client = mock_client
+        
+        result = jar.execute("Test")
+        
+        assert result == "Response"
+        assert jar.total_tokens == 0  # Should not error

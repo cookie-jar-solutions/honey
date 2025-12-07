@@ -21,6 +21,7 @@ from .jars import OpenAIJar as openai_jar
 from .jars import AnthropicJar as anthropic_jar
 from .jars import GeminiJar as gemini_jar
 from .jars import MockJar as mock_jar
+from .jars import OpenAICompatibleJar as openai_compatible_jar
 
 # Auto-install the loader when hive is imported
 loader.install()
@@ -32,4 +33,5 @@ __all__ = [
     'anthropic_jar',
     'gemini_jar',
     'mock_jar',
+    'openai_compatible_jar',
 ]

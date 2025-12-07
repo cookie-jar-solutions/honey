@@ -282,7 +282,7 @@ class OpenAICompatibleJar(Jar):
         
         try:
             response = client.chat.completions.create(
-                messages=self.messages,
+                messages=self.history,
                 **api_kwargs
             )
             
@@ -294,8 +294,6 @@ class OpenAICompatibleJar(Jar):
             
             # Update token counts
             if hasattr(response, 'usage') and response.usage:
-                self.prompt_tokens += response.usage.prompt_tokens
-                self.completion_tokens += response.usage.completion_tokens
                 self.total_tokens += response.usage.total_tokens
             
             return assistant_message
@@ -315,7 +313,7 @@ class OpenAICompatibleJar(Jar):
         
         try:
             response = await client.chat.completions.create(
-                messages=self.messages,
+                messages=self.history,
                 **api_kwargs
             )
             
@@ -327,8 +325,6 @@ class OpenAICompatibleJar(Jar):
             
             # Update token counts
             if hasattr(response, 'usage') and response.usage:
-                self.prompt_tokens += response.usage.prompt_tokens
-                self.completion_tokens += response.usage.completion_tokens
                 self.total_tokens += response.usage.total_tokens
             
             return assistant_message

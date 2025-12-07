@@ -3,7 +3,7 @@
 import pytest
 import asyncio
 from unittest.mock import Mock, AsyncMock, MagicMock
-from honey.jars import MockJar, OpenAIJar, AnthropicJar, GeminiJar, get_active_async_jar
+from honey.jars import MockJar, OpenAIJar, OpenAICompatibleJar, AnthropicJar, GeminiJar, get_active_async_jar
 
 
 class TestAsyncJarContextManagers:
@@ -244,3 +244,115 @@ class TestAsyncContextIsolation:
         
         assert get_active_jar() is None
         assert get_active_async_jar() is None
+
+
+class TestOpenAICompatibleJarAsync:
+    """Tests for OpenAICompatibleJar async methods."""
+    
+    @pytest.mark.asyncio
+    async def test_aexecute_with_mocked_client(self):
+        """Test aexecute with mocked async client."""
+        jar = OpenAICompatibleJar(
+            model="llama3",
+            base_url="http://localhost:11434/v1"
+        )
+        
+        # Mock async client
+        mock_client = AsyncMock()
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(content="Async LLM response"))]
+        mock_response.usage = Mock(total_tokens=60)
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        jar._async_client = mock_client
+        
+        result = await jar.aexecute("Async test prompt")
+        
+        assert result == "Async LLM response"
+        assert jar.total_tokens == 60
+        assert jar.message_count == 2
+        mock_client.chat.completions.create.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_aexecute_passes_history_correctly(self):
+        """Test aexecute passes history (not messages) to API."""
+        jar = OpenAICompatibleJar(
+            model="llama3",
+            base_url="http://localhost:11434/v1"
+        )
+        
+        jar.add_message("user", "Previous message")
+        jar.add_message("assistant", "Previous response")
+        
+        mock_client = AsyncMock()
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(content="Response"))]
+        mock_response.usage = Mock(total_tokens=10)
+        
+        # Capture messages at call time (before assistant response is added)
+        captured_messages = None
+        async def capture_messages(**kwargs):
+            nonlocal captured_messages
+            captured_messages = kwargs["messages"].copy()  # Copy the list
+            return mock_response
+        
+        mock_client.chat.completions.create.side_effect = capture_messages
+        
+        jar._async_client = mock_client
+        await jar.aexecute("New message")
+        
+        # Verify the messages sent to API (captured before assistant response)
+        assert captured_messages is not None
+        assert len(captured_messages) == 3
+        assert captured_messages[2]["content"] == "New message"
+        
+        # After execute completes, history should have assistant response too
+        assert len(jar.history) == 4
+    
+    @pytest.mark.asyncio
+    async def test_aexecute_passes_config_to_api(self):
+        """Test aexecute passes configuration to API, filtering base_url and api_key."""
+        jar = OpenAICompatibleJar(
+            model="llama3",
+            base_url="http://localhost:11434/v1",
+            temperature=0.8,
+            max_tokens=200
+        )
+        
+        mock_client = AsyncMock()
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(content="Response"))]
+        mock_response.usage = Mock(total_tokens=10)
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        jar._async_client = mock_client
+        await jar.aexecute("Test")
+        
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["model"] == "llama3"
+        assert call_kwargs["temperature"] == 0.8
+        assert call_kwargs["max_tokens"] == 200
+        # These should be filtered out
+        assert "api_key" not in call_kwargs
+        assert "base_url" not in call_kwargs
+    
+    @pytest.mark.asyncio
+    async def test_aexecute_handles_missing_usage(self):
+        """Test aexecute handles responses without usage data."""
+        jar = OpenAICompatibleJar(
+            model="llama3",
+            base_url="http://localhost:11434/v1"
+        )
+        
+        mock_client = AsyncMock()
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(content="Response"))]
+        mock_response.usage = None  # Some APIs might not return usage
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        jar._async_client = mock_client
+        
+        result = await jar.aexecute("Test")
+        
+        assert result == "Response"
+        assert jar.total_tokens == 0  # Should not error
