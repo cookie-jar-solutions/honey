@@ -8,12 +8,8 @@ import contextvars
 from typing import Optional, List, Dict, Any
 from abc import ABC, abstractmethod
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    # dotenv is optional
-    pass
+from dotenv import load_dotenv
+load_dotenv()
 
 # Context variables to track active jars (separate for sync and async)
 _sync_jar: contextvars.ContextVar[Optional['Jar']] = contextvars.ContextVar(
