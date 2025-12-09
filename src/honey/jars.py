@@ -27,10 +27,11 @@ class Jar(ABC):
     and execute prompts against LLM APIs in both sync and async modes.
     """
     
-    def __init__(self, **config):
+    def __init__(self, system_prompt: Optional[str] = None, **config):
         """Initialize jar with configuration.
         
         Args:
+            system_prompt: Optional system prompt to set conversation context
             **config: Runtime configuration (model, temperature, api_key, etc.)
         """
         self.config = config
@@ -39,6 +40,10 @@ class Jar(ABC):
         self.message_count = 0
         self._sync_token = None
         self._async_token = None
+        
+        # Add system prompt if provided
+        if system_prompt:
+            self.add_message("system", system_prompt)
     
     @abstractmethod
     def execute(self, prompt: str, **metadata) -> str:
@@ -109,14 +114,6 @@ class Jar(ABC):
         self.history.clear()
         self.message_count = 0
         self.total_tokens = 0
-    
-    def add_system_prompt(self, content: str):
-        """Add a system prompt to the conversation.
-        
-        Args:
-            content: System prompt content
-        """
-        self.add_message("system", content)
 
 
 class MockJar(Jar):
@@ -140,15 +137,16 @@ class MockJar(Jar):
 class OpenAIJar(Jar):
     """Jar that uses OpenAI API for LLM execution."""
     
-    def __init__(self, model: str = "gpt-4", api_key: Optional[str] = None, **kwargs):
+    def __init__(self, model: str = "gpt-4", api_key: Optional[str] = None, system_prompt: Optional[str] = None, **kwargs):
         """Initialize OpenAI jar.
         
         Args:
             model: OpenAI model to use (default: gpt-4)
             api_key: OpenAI API key (or set OPENAI_API_KEY env var)
+            system_prompt: Optional system prompt to set conversation context
             **kwargs: Additional OpenAI API parameters (temperature, max_tokens, etc.)
         """
-        super().__init__(model=model, api_key=api_key, **kwargs)
+        super().__init__(system_prompt=system_prompt, model=model, api_key=api_key, **kwargs)
         self._client = None
         self._async_client = None
     
@@ -227,16 +225,17 @@ class OpenAICompatibleJar(Jar):
     such as Ollama, LM Studio, vLLM, LocalAI, etc.
     """
     
-    def __init__(self, model: str, base_url: str, api_key: Optional[str] = "not-needed", **kwargs):
+    def __init__(self, model: str, base_url: str, api_key: Optional[str] = "not-needed", system_prompt: Optional[str] = None, **kwargs):
         """Initialize OpenAI-compatible jar.
         
         Args:
             model: Model name (specific to your API provider)
             base_url: Base URL for the API endpoint (e.g., "http://localhost:11434/v1")
             api_key: API key (optional, defaults to "not-needed" for local endpoints)
+            system_prompt: Optional system prompt to set conversation context
             **kwargs: Additional API parameters (temperature, max_tokens, etc.)
         """
-        super().__init__(model=model, api_key=api_key, base_url=base_url, **kwargs)
+        super().__init__(system_prompt=system_prompt, model=model, api_key=api_key, base_url=base_url, **kwargs)
         self._client = None
         self._async_client = None
     
@@ -282,7 +281,7 @@ class OpenAICompatibleJar(Jar):
         
         try:
             response = client.chat.completions.create(
-                messages=self.messages,
+                messages=self.history,
                 **api_kwargs
             )
             
@@ -294,8 +293,6 @@ class OpenAICompatibleJar(Jar):
             
             # Update token counts
             if hasattr(response, 'usage') and response.usage:
-                self.prompt_tokens += response.usage.prompt_tokens
-                self.completion_tokens += response.usage.completion_tokens
                 self.total_tokens += response.usage.total_tokens
             
             return assistant_message
@@ -315,7 +312,7 @@ class OpenAICompatibleJar(Jar):
         
         try:
             response = await client.chat.completions.create(
-                messages=self.messages,
+                messages=self.history,
                 **api_kwargs
             )
             
@@ -327,8 +324,6 @@ class OpenAICompatibleJar(Jar):
             
             # Update token counts
             if hasattr(response, 'usage') and response.usage:
-                self.prompt_tokens += response.usage.prompt_tokens
-                self.completion_tokens += response.usage.completion_tokens
                 self.total_tokens += response.usage.total_tokens
             
             return assistant_message
@@ -339,15 +334,16 @@ class OpenAICompatibleJar(Jar):
 class AnthropicJar(Jar):
     """Jar that uses Anthropic API for LLM execution."""
     
-    def __init__(self, model: str = "claude-3-5-sonnet-20241022", api_key: Optional[str] = None, **kwargs):
+    def __init__(self, model: str = "claude-3-5-sonnet-20241022", api_key: Optional[str] = None, system_prompt: Optional[str] = None, **kwargs):
         """Initialize Anthropic jar.
         
         Args:
             model: Anthropic model to use (default: claude-3-5-sonnet-20241022)
             api_key: Anthropic API key (or set ANTHROPIC_API_KEY env var)
+            system_prompt: Optional system prompt to set conversation context
             **kwargs: Additional Anthropic API parameters (temperature, max_tokens, etc.)
         """
-        super().__init__(model=model, api_key=api_key, **kwargs)
+        super().__init__(system_prompt=system_prompt, model=model, api_key=api_key, **kwargs)
         self._client = None
         self._async_client = None
     
@@ -458,15 +454,16 @@ class AnthropicJar(Jar):
 class GeminiJar(Jar):
     """Jar that uses Google Gemini API for LLM execution."""
     
-    def __init__(self, model: str = "gemini-2.0-flash-exp", api_key: Optional[str] = None, **kwargs):
+    def __init__(self, model: str = "gemini-2.0-flash-exp", api_key: Optional[str] = None, system_prompt: Optional[str] = None, **kwargs):
         """Initialize Gemini jar.
         
         Args:
             model: Gemini model to use (default: gemini-2.0-flash-exp)
             api_key: Google API key (or set GOOGLE_API_KEY env var)
+            system_prompt: Optional system prompt to set conversation context
             **kwargs: Additional Gemini API parameters (temperature, max_tokens, etc.)
         """
-        super().__init__(model=model, api_key=api_key, **kwargs)
+        super().__init__(system_prompt=system_prompt, model=model, api_key=api_key, **kwargs)
         self._client = None
         self._async_client = None
     
@@ -529,7 +526,11 @@ class GeminiJar(Jar):
         system_instruction, chat_history = self._prepare_gemini_history()
         
         # Start chat with history (excluding the last user message we just added)
-        chat = client.start_chat(history=chat_history[:-1])
+        # Include system_instruction if present
+        chat_kwargs = {"history": chat_history[:-1]}
+        if system_instruction:
+            chat_kwargs["system_instruction"] = system_instruction
+        chat = client.start_chat(**chat_kwargs)
         
         # Send the current message
         response = chat.send_message(prompt)
@@ -555,7 +556,11 @@ class GeminiJar(Jar):
         system_instruction, chat_history = self._prepare_gemini_history()
         
         # Start chat with history (excluding the last user message we just added)
-        chat = client.start_chat(history=chat_history[:-1])
+        # Include system_instruction if present
+        chat_kwargs = {"history": chat_history[:-1]}
+        if system_instruction:
+            chat_kwargs["system_instruction"] = system_instruction
+        chat = client.start_chat(**chat_kwargs)
         
         # Send the current message asynchronously
         response = await chat.send_message_async(prompt)
@@ -590,4 +595,4 @@ def get_active_async_jar() -> Optional[Jar]:
 
 
 # Export jar classes for user instantiation
-__all__ = ['Jar', 'MockJar', 'OpenAIJar', 'OpenAICompatiblejar', 'AnthropicJar', 'GeminiJar', 'get_active_jar', 'get_active_async_jar']
+__all__ = ['Jar', 'MockJar', 'OpenAIJar', 'OpenAICompatibleJar', 'AnthropicJar', 'GeminiJar', 'get_active_jar', 'get_active_async_jar']

@@ -53,7 +53,7 @@ Goodbye, {{name}}! Have a great day!
 import sys
 sys.path.insert(0, 'prompts')
 
-import hive  # Auto-installs the .hny loader
+import honey  # Auto-installs the .hny loader
 import greetings
 
 # Just renders the template
@@ -64,7 +64,7 @@ print(result)  # "Hello, Alice! How can I help you today?"
 **With an LLM (executes via API):**
 
 ```python
-from hive import openai_jar
+from honey import openai_jar
 import greetings
 
 # Create a jar with configuration
@@ -84,7 +84,7 @@ with jar:
 **Stateful multi-turn conversations:**
 
 ```python
-from hive import openai_jar
+from honey import openai_jar
 import chat_prompts
 
 # Create reusable jar
@@ -110,7 +110,7 @@ print(f"Total tokens: {jar.total_tokens}")
 
 ```python
 import asyncio
-from hive import openai_jar
+from honey import openai_jar
 import prompts
 
 async def main():
@@ -132,7 +132,7 @@ asyncio.run(main())
 **Nested jars (inner overrides outer):**
 
 ```python
-from hive import openai_jar, anthropic_jar
+from honey import openai_jar, anthropic_jar
 from prompts.demo import summarize
 
 outer = openai_jar(model="gpt-3.5-turbo")
@@ -184,7 +184,7 @@ loop_prompt
 ### OpenAI
 
 ```python
-from hive import openai_jar
+from honey import openai_jar
 
 jar = openai_jar(
     model="gpt-4",
@@ -197,7 +197,7 @@ jar = openai_jar(
 ### Anthropic Claude
 
 ```python
-from hive import anthropic_jar
+from honey import anthropic_jar
 
 jar = anthropic_jar(
     model="claude-3-5-sonnet-20241022",
@@ -210,7 +210,7 @@ jar = anthropic_jar(
 ### Google Gemini
 
 ```python
-from hive import gemini_jar
+from honey import gemini_jar
 
 jar = gemini_jar(
     model="gemini-2.0-flash-exp",
@@ -222,7 +222,7 @@ jar = gemini_jar(
 ### Mock Jar (for testing)
 
 ```python
-from hive import mock_jar
+from honey import mock_jar
 
 jar = mock_jar()
 with jar:
@@ -269,25 +269,25 @@ uv pip install -e ".[dev]"
 uv run pytest tests/ -v
 
 # Run with coverage
-uv run pytest tests/ --cov=hive --cov-report=html
+uv run pytest tests/ --cov=honey --cov-report=html
 
 # Run specific test file
-uv run pytest tests/hive/test_jars.py -v
+uv run pytest tests/honey/test_jars.py -v
 
 # Run specific test
-uv run pytest tests/hive/test_jars.py::TestMockJar::test_execute_returns_mock_response -v
+uv run pytest tests/honey/test_jars.py::TestMockJar::test_execute_returns_mock_response -v
 ```
 
 ### Test Coverage
 
 Current coverage: **81.89%** (84 tests passing)
 
-- `hive/jars.py`: 80.25%
-- `hive/loader.py`: 85.34%
+- `honey/jars.py`: 80.25%
+- `honey/loader.py`: 85.34%
 
 View detailed coverage report:
 ```bash
-uv run pytest tests/ --cov=hive --cov-report=html
+uv run pytest tests/ --cov=honey --cov-report=html
 open htmlcov/index.html
 ```
 
@@ -295,17 +295,18 @@ open htmlcov/index.html
 
 ```
 honey/
-├── hive/
-│   ├── __init__.py      # Package exports
-│   ├── loader.py        # .hny file import system
-│   └── jars.py          # LLM execution jars
+├── src/
+│   └── honey/           # Main package (import honey)
+│       ├── __init__.py      # Package exports
+│       ├── loader.py        # .hny file import system
+│       └── jars.py          # LLM execution jars
 ├── examples/
 │   └── prompts/         # Example .hny files
 ├── tests/
 │   ├── conftest.py          # Shared fixtures
 │   ├── fixtures/
 │   │   └── prompts/         # Test .hny files
-│   └── hive/
+│   └── honey/
 │       ├── test_loader.py         # Loader tests (23)
 │       ├── test_loader_async.py   # Async loader tests (4)
 │       ├── test_jars.py           # Jar tests (34)
@@ -321,7 +322,7 @@ honey/
 
 ```python
 import asyncio
-from hive import anthropic_jar
+from honey import anthropic_jar
 from prompts.demo import summarize
 
 async def process_many(articles):
@@ -356,7 +357,7 @@ Analyze the following items:
 
 ## How It Works
 
-1. **Import Hook**: When you `import hive`, it automatically installs a custom import hook (`HnyFinder`) in `sys.meta_path`
+1. **Import Hook**: When you `import honey`, it automatically installs a custom import hook (`HnyFinder`) in `sys.meta_path`
 2. **File Discovery**: When you import a module, the hook searches `sys.path` for matching `.hny` files
 3. **Template Parsing**: Found `.hny` files are parsed and each prompt becomes a callable Python function
 4. **Runtime Detection**: Each function checks for active jars using `contextvars`
@@ -396,5 +397,5 @@ MIT
 
 Contributions welcome! Please ensure:
 - All tests pass: `uv run pytest tests/`
-- Coverage stays above 80%: `uv run pytest tests/ --cov=hive`
+- Coverage stays above 80%: `uv run pytest tests/ --cov=honey`
 - Code follows existing patterns

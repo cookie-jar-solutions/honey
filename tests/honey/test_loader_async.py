@@ -1,7 +1,7 @@
 """Asynchronous tests for the .hny file loader runtime integration."""
 
 import pytest
-from hive import loader, mock_jar
+from honey import loader, mock_jar
 
 
 class TestAsyncRuntimeIntegration:

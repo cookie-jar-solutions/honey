@@ -23,7 +23,7 @@ class TestLoaderJarIntegration:
     
     def test_prompt_with_jar_executes_llm(self, temp_hny_file, isolated_sys_path, clean_jar_context):
         """Test prompt function executes with jar when active."""
-        from hive.jars import MockJar
+        from honey.jars import MockJar
         
         content = "summarize\nSummarize: {{text}}"
         hny_path = temp_hny_file(content, "test_prompts.hny")
@@ -40,7 +40,7 @@ class TestLoaderJarIntegration:
     
     def test_multi_turn_conversation(self, temp_hny_file, isolated_sys_path, clean_jar_context):
         """Test multi-turn conversation with stateful jar."""
-        from hive.jars import MockJar
+        from honey.jars import MockJar
         
         content = "chat\n{{message}}"
         hny_path = temp_hny_file(content, "conversation.hny")
@@ -61,7 +61,7 @@ class TestLoaderJarIntegration:
     
     def test_different_jars_isolated(self, temp_hny_file, isolated_sys_path, clean_jar_context):
         """Test different jar instances maintain separate state."""
-        from hive.jars import MockJar
+        from honey.jars import MockJar
         
         content = "process\n{{input}}"
         hny_path = temp_hny_file(content, "processor.hny")
@@ -88,7 +88,7 @@ class TestAsyncIntegration:
     @pytest.mark.asyncio
     async def test_async_prompt_execution(self, temp_hny_file, isolated_sys_path, clean_jar_context):
         """Test async prompt execution with jar."""
-        from hive.jars import MockJar
+        from honey.jars import MockJar
         
         content = "analyze\nAnalyze: {{data}}"
         hny_path = temp_hny_file(content, "async_prompts.hny")
@@ -106,7 +106,7 @@ class TestAsyncIntegration:
     @pytest.mark.asyncio
     async def test_async_multi_turn(self, temp_hny_file, isolated_sys_path, clean_jar_context):
         """Test async multi-turn conversation."""
-        from hive.jars import MockJar
+        from honey.jars import MockJar
         
         content = "discuss\n{{topic}}"
         hny_path = temp_hny_file(content, "async_chat.hny")
@@ -126,7 +126,7 @@ class TestAsyncIntegration:
     async def test_concurrent_async_requests(self, temp_hny_file, isolated_sys_path, clean_jar_context):
         """Test concurrent async requests with different jars."""
         import asyncio
-        from hive.jars import MockJar
+        from honey.jars import MockJar
         
         content = "task\n{{work}}"
         hny_path = temp_hny_file(content, "tasks.hny")
@@ -159,7 +159,7 @@ class TestRealWorldScenarios:
     
     def test_template_with_conditionals(self, temp_hny_file, isolated_sys_path, clean_jar_context):
         """Test template with Jinja2 conditionals."""
-        from hive.jars import MockJar
+        from honey.jars import MockJar
         
         content = """format
 Format this text:
@@ -181,7 +181,7 @@ Content: {{content}}"""
     
     def test_multiple_prompts_same_jar(self, temp_hny_file, isolated_sys_path, clean_jar_context):
         """Test using multiple different prompts with same jar."""
-        from hive.jars import MockJar
+        from honey.jars import MockJar
         
         content1 = "summarize\nSummarize: {{text}}"
         content2 = "translate\nTranslate to {{lang}}: {{text}}"
@@ -206,7 +206,7 @@ Content: {{content}}"""
     
     def test_jar_with_custom_config(self, temp_hny_file, isolated_sys_path, clean_jar_context):
         """Test jar with custom configuration."""
-        from hive.jars import OpenAIJar
+        from honey.jars import OpenAIJar
         
         content = "generate\nGenerate: {{prompt}}"
         
@@ -254,7 +254,7 @@ class TestErrorHandling:
     
     def test_jar_state_after_error(self, temp_hny_file, isolated_sys_path, clean_jar_context):
         """Test jar state is maintained even after execution error."""
-        from hive.jars import MockJar
+        from honey.jars import MockJar
         
         content = "process\n{{data}}"
         hny_path = temp_hny_file(content, "error_test.hny")
