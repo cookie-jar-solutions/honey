@@ -29,7 +29,7 @@ pip install -e .
 
 **Dependencies:**
 - Core: `jinja2>=3.1.6` (required)
-- Optional: `openai`, `anthropic`, `google-generativeai` (install as needed)
+- Optional: `openai`, `anthropic`, `google-genai` (install as needed)
 
 ## Quick Start
 
@@ -280,9 +280,9 @@ uv run pytest tests/honey/test_jars.py::TestMockJar::test_execute_returns_mock_r
 
 ### Test Coverage
 
-Current coverage: **81.89%** (84 tests passing)
+Current coverage: **79.72%** (80 tests passing)
 
-- `honey/jars.py`: 80.25%
+- `honey/jars.py`: 77.67%
 - `honey/loader.py`: 85.34%
 
 View detailed coverage report:

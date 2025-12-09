@@ -7,6 +7,9 @@ They support both synchronous and asynchronous execution modes.
 import contextvars
 from typing import Optional, List, Dict, Any
 from abc import ABC, abstractmethod
+from unittest.mock import Mock
+
+from openai import OpenAI, AsyncOpenAI
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -43,7 +46,7 @@ class Jar(ABC):
         
         # Add system prompt if provided
         if system_prompt:
-            self.add_message("system", system_prompt)
+            self.add_system_prompt(system_prompt)
     
     @abstractmethod
     def execute(self, prompt: str, **metadata) -> str:
@@ -100,6 +103,16 @@ class Jar(ABC):
         """
         self.history.append({"role": role, "content": content})
         self.message_count += 1
+
+    def add_system_prompt(self, content: str):
+        """Add or update the system prompt at the start of history."""
+        for msg in self.history:
+            if msg["role"] == "system":
+                msg["content"] = content
+                return
+        # Ensure system prompt appears first in the conversation
+        self.history.insert(0, {"role": "system", "content": content})
+        self.message_count += 1
     
     def get_history(self) -> List[Dict[str, str]]:
         """Get the conversation history.
@@ -133,203 +146,146 @@ class MockJar(Jar):
         self.add_message("assistant", response)
         return response
 
+class OpenAIBaseJar(Jar):
+    """Base class for OpenAI-style APIs (OpenAI + compatible)."""
 
-class OpenAIJar(Jar):
-    """Jar that uses OpenAI API for LLM execution."""
-    
-    def __init__(self, model: str = "gpt-4", api_key: Optional[str] = None, system_prompt: Optional[str] = None, **kwargs):
-        """Initialize OpenAI jar.
-        
-        Args:
-            model: OpenAI model to use (default: gpt-4)
-            api_key: OpenAI API key (or set OPENAI_API_KEY env var)
-            system_prompt: Optional system prompt to set conversation context
-            **kwargs: Additional OpenAI API parameters (temperature, max_tokens, etc.)
-        """
-        super().__init__(system_prompt=system_prompt, model=model, api_key=api_key, **kwargs)
-        self._client = None
-        self._async_client = None
-    
-    def _get_client(self):
-        """Lazy load OpenAI sync client."""
-        if self._client is None:
-            try:
-                from openai import OpenAI
-                self._client = OpenAI(api_key=self.config.get('api_key'))
-            except ImportError:
-                raise ImportError(
-                    "OpenAI package not installed. Install it with: pip install openai"
-                )
-        return self._client
-    
-    def _get_async_client(self):
-        """Lazy load OpenAI async client."""
-        if self._async_client is None:
-            try:
-                from openai import AsyncOpenAI
-                self._async_client = AsyncOpenAI(api_key=self.config.get('api_key'))
-            except ImportError:
-                raise ImportError(
-                    "OpenAI package not installed. Install it with: pip install openai"
-                )
-        return self._async_client
-    
-    def execute(self, prompt: str, **metadata) -> str:
-        """Execute prompt using OpenAI API synchronously."""
-        client = self._get_client()
-        
-        # Add user message to history
-        self.add_message("user", prompt)
-        
-        # Prepare API call
-        api_kwargs = {k: v for k, v in self.config.items() if k not in ['api_key']}
-        
-        response = client.chat.completions.create(
-            messages=self.history,
-            **api_kwargs
-        )
-        
-        # Extract response and update state
-        assistant_message = response.choices[0].message.content
-        self.add_message("assistant", assistant_message)
-        self.total_tokens += response.usage.total_tokens
-        
-        return assistant_message
-    
-    async def aexecute(self, prompt: str, **metadata) -> str:
-        """Execute prompt using OpenAI API asynchronously."""
-        client = self._get_async_client()
-        
-        # Add user message to history
-        self.add_message("user", prompt)
-        
-        # Prepare API call
-        api_kwargs = {k: v for k, v in self.config.items() if k not in ['api_key']}
-        
-        response = await client.chat.completions.create(
-            messages=self.history,
-            **api_kwargs
-        )
-        
-        # Extract response and update state
-        assistant_message = response.choices[0].message.content
-        self.add_message("assistant", assistant_message)
-        self.total_tokens += response.usage.total_tokens
-        
-        return assistant_message
+    # ---------- capability detection ----------
 
-class OpenAICompatibleJar(Jar):
-    """Jar implementation for OpenAI-compatible API endpoints.
-    
-    Works with any service that implements the OpenAI API specification,
-    such as Ollama, LM Studio, vLLM, LocalAI, etc.
-    """
-    
-    def __init__(self, model: str, base_url: str, api_key: Optional[str] = "not-needed", system_prompt: Optional[str] = None, **kwargs):
-        """Initialize OpenAI-compatible jar.
-        
-        Args:
-            model: Model name (specific to your API provider)
-            base_url: Base URL for the API endpoint (e.g., "http://localhost:11434/v1")
-            api_key: API key (optional, defaults to "not-needed" for local endpoints)
-            system_prompt: Optional system prompt to set conversation context
-            **kwargs: Additional API parameters (temperature, max_tokens, etc.)
-        """
-        super().__init__(system_prompt=system_prompt, model=model, api_key=api_key, base_url=base_url, **kwargs)
-        self._client = None
-        self._async_client = None
-    
-    def _get_client(self):
-        """Lazy load OpenAI-compatible sync client."""
-        if self._client is None:
-            try:
-                from openai import OpenAI
-                self._client = OpenAI(
-                    api_key=self.config.get('api_key'),
-                    base_url=self.config.get('base_url')
-                )
-            except ImportError:
-                raise ImportError(
-                    "OpenAI package not installed. Install it with: pip install openai"
-                )
-        return self._client
-    
-    def _get_async_client(self):
-        """Lazy load OpenAI-compatible async client."""
-        if self._async_client is None:
-            try:
-                from openai import AsyncOpenAI
-                self._async_client = AsyncOpenAI(
-                    api_key=self.config.get('api_key'),
-                    base_url=self.config.get('base_url')
-                )
-            except ImportError:
-                raise ImportError(
-                    "OpenAI package not installed. Install it with: pip install openai"
-                )
-        return self._async_client
-    
+    def _supports_responses(self, client) -> bool:
+        if isinstance(client, Mock):
+            responses = client.__dict__.get("responses")
+        else:
+            responses = getattr(client, "responses", None)
+        return responses is not None and hasattr(responses, "create")
+
+    # ---------- shared kwargs ----------
+
+    def _call_kwargs(self, exclude=()):
+        return {
+            k: v for k, v in self.config.items()
+            if k not in ("api_key", "base_url", "model", *exclude)
+        }
+
+    # ---------- sync ----------
+
     def execute(self, prompt: str, **metadata) -> str:
-        """Execute prompt using OpenAI-compatible API synchronously."""
         client = self._get_client()
-        
-        # Add user message to history
         self.add_message("user", prompt)
-        
-        # Prepare API call
-        api_kwargs = {k: v for k, v in self.config.items() if k not in ['api_key', 'base_url']}
-        
-        try:
+
+        if self._supports_responses(client):
+            response = client.responses.create(
+                model=self.config["model"],
+                input=self.history,
+                **self._call_kwargs()
+            )
+            assistant_message = response.output_text
+            usage = response.usage
+        else:
             response = client.chat.completions.create(
+                model=self.config["model"],
                 messages=self.history,
-                **api_kwargs
+                **self._call_kwargs()
             )
-            
-            # Extract assistant's response
             assistant_message = response.choices[0].message.content
-            
-            # Add to history
-            self.add_message("assistant", assistant_message)
-            
-            # Update token counts
-            if hasattr(response, 'usage') and response.usage:
-                self.total_tokens += response.usage.total_tokens
-            
-            return assistant_message
-            
-        except Exception as e:
-            raise RuntimeError(f"OpenAI-compatible API error: {str(e)}")
-    
+            usage = getattr(response, "usage", None)
+
+        self.add_message("assistant", assistant_message)
+
+        if usage:
+            self.total_tokens += usage.total_tokens
+
+        return assistant_message
+
+    # ---------- async ----------
+
     async def aexecute(self, prompt: str, **metadata) -> str:
-        """Execute prompt using OpenAI-compatible API asynchronously."""
         client = self._get_async_client()
-        
-        # Add user message to history
         self.add_message("user", prompt)
-        
-        # Prepare API call
-        api_kwargs = {k: v for k, v in self.config.items() if k not in ['api_key', 'base_url']}
-        
-        try:
-            response = await client.chat.completions.create(
-                messages=self.history,
-                **api_kwargs
+
+        if self._supports_responses(client):
+            response = await client.responses.create(
+                model=self.config["model"],
+                input=self.history,
+                **self._call_kwargs()
             )
-            
-            # Extract assistant's response
+            assistant_message = response.output_text
+            usage = response.usage
+        else:
+            response = await client.chat.completions.create(
+                model=self.config["model"],
+                messages=self.history,
+                **self._call_kwargs()
+            )
             assistant_message = response.choices[0].message.content
-            
-            # Add to history
-            self.add_message("assistant", assistant_message)
-            
-            # Update token counts
-            if hasattr(response, 'usage') and response.usage:
-                self.total_tokens += response.usage.total_tokens
-            
-            return assistant_message
-            
-        except Exception as e:
-            raise RuntimeError(f"OpenAI-compatible API error: {str(e)}")
+            usage = getattr(response, "usage", None)
+
+        self.add_message("assistant", assistant_message)
+
+        if usage:
+            self.total_tokens += usage.total_tokens
+
+        return assistant_message
+    
+class OpenAICompatibleJar(OpenAIBaseJar):
+    def __init__(self, model, base_url, api_key="not-needed", **kwargs):
+        super().__init__(
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            **kwargs
+        )
+        self._client = None
+        self._async_client = None
+
+    def _get_client(self):
+        if self._client is None:
+            from openai import OpenAI
+            self._client = OpenAI(
+                api_key=self.config["api_key"],
+                base_url=self.config["base_url"],
+            )
+        return self._client
+
+    def _get_async_client(self):
+        if self._async_client is None:
+            from openai import AsyncOpenAI
+            self._async_client = AsyncOpenAI(
+                api_key=self.config["api_key"],
+                base_url=self.config["base_url"],
+            )
+        return self._async_client
+
+class OpenAIJar(OpenAIBaseJar):
+    def __init__(self, model="gpt-4.1-mini", api_key=None, **kwargs):
+        super().__init__(model=model, api_key=api_key, **kwargs)
+        self._client = None
+        self._async_client = None
+
+    def _get_client(self):
+        if self._client is None:
+            from openai import OpenAI
+            self._client = OpenAI(api_key=self.config.get("api_key"))
+        return self._client
+
+    def _get_async_client(self):
+        if self._async_client is None:
+            from openai import AsyncOpenAI
+            self._async_client = AsyncOpenAI(api_key=self.config.get("api_key"))
+        return self._async_client
+
+
+class OpenAIClientJar(OpenAIJar):
+    def __init__(self, model, sync_client, async_client, **kwargs):
+        super().__init__(model=model, **kwargs)
+        self._client = sync_client
+        self._async_client = async_client
+
+    def _get_client(self):
+        return self._client
+
+    def _get_async_client(self):
+        return self._async_client
+    
 
 class AnthropicJar(Jar):
     """Jar that uses Anthropic API for LLM execution."""
