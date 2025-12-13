@@ -96,17 +96,17 @@ def mock_jar():
 @pytest.fixture
 def clean_jar_context():
     """Ensure no jar contexts are active before/after test."""
-    from honey import jars
+    from honey.jars import base
     
     # Clear any existing contexts
-    jars._sync_jar.set(None)
-    jars._async_jar.set(None)
+    base._sync_jar.set(None)
+    base._async_jar.set(None)
     
     yield
     
     # Clean up after test
-    jars._sync_jar.set(None)
-    jars._async_jar.set(None)
+    base._sync_jar.set(None)
+    base._async_jar.set(None)
 
 
 @pytest.fixture
